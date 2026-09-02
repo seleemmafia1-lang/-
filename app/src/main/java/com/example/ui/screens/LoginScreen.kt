@@ -159,7 +159,7 @@ fun LoginScreen(
                         }
                     }
 
-                    // Username field
+                    // Username / Identifier field
                     OutlinedTextField(
                         value = username,
                         onValueChange = {
