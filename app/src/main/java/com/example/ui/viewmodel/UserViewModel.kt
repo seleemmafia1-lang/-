@@ -10,24 +10,19 @@ import com.example.data.model.UserRole
 import com.example.data.repository.QualityRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.UUID
 
-sealed interface LoginUiState {
-    object Idle : LoginUiState
-    object Loading : LoginUiState
-    data class Success(val user: UserProfile) : LoginUiState
-    data class Error(val message: String) : LoginUiState
-}
+data class AuthUiState(
+    val currentUser: UserProfile? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
 
 class UserViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: QualityRepository = QualityRepository(AppDatabase.getInstance(application))
 
-    private val _currentUser = MutableStateFlow<UserProfile?>(null)
-    val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
-
-    private val _loginState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
-    val loginState: StateFlow<LoginUiState> = _loginState.asStateFlow()
+    private val _uiState = MutableStateFlow(AuthUiState())
+    val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     val users: StateFlow<List<RaneenUser>> = repository.allUsers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -41,78 +36,55 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun login(
-        username: String,
-        passwordInput: String,
-        role: UserRole,
-        branch: String = "",
-        onResult: (Boolean, String) -> Unit = { _, _ -> }
-    ) {
+    fun login(username: String, passwordInput: String) {
         val cleanUsername = username.trim()
         if (cleanUsername.isEmpty()) {
-            val msg = "يرجى إدخال اسم المستخدم أو الرقم الوظيفي"
-            _loginState.value = LoginUiState.Error(msg)
-            onResult(false, msg)
+            _uiState.update { it.copy(errorMessage = "يرجى إدخال اسم المستخدم أو الرقم الوظيفي") }
             return
         }
-
         if (passwordInput.isBlank()) {
-            val msg = "يرجى إدخال كلمة المرور"
-            _loginState.value = LoginUiState.Error(msg)
-            onResult(false, msg)
+            _uiState.update { it.copy(errorMessage = "يرجى إدخال كلمة المرور") }
             return
         }
 
-        _loginState.value = LoginUiState.Loading
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
         viewModelScope.launch {
             try {
                 val existingUser = repository.getUserByUsername(cleanUsername)
                 if (existingUser == null) {
-                    val errorMsg = "اسم المستخدم ($cleanUsername) غير مسجل في قاعدة البيانات."
-                    _loginState.value = LoginUiState.Error(errorMsg)
-                    _uiMessage.emit(errorMsg)
-                    onResult(false, errorMsg)
+                    val msg = "اسم المستخدم ($cleanUsername) غير مسجل في قاعدة البيانات."
+                    _uiState.update { it.copy(isLoading = false, errorMessage = msg) }
+                    _uiMessage.emit(msg)
                     return@launch
                 }
 
-                // Verify password
-                val isPasswordValid = existingUser.passwordHash == passwordInput || 
-                                     (existingUser.passwordHash == "123" && (passwordInput == "123" || passwordInput == "123456"))
+                val isPasswordValid = existingUser.passwordHash == passwordInput ||
+                        (existingUser.passwordHash == "123" && (passwordInput == "123" || passwordInput == "123456"))
                 if (!isPasswordValid) {
-                    val errorMsg = "كلمة المرور غير صحيحة. يرجى التأكد وإعادة المحاولة."
-                    _loginState.value = LoginUiState.Error(errorMsg)
-                    _uiMessage.emit(errorMsg)
-                    onResult(false, errorMsg)
-                    return@launch
-                }
-
-                // Verify Role
-                if (existingUser.role != role) {
-                    val errorMsg = "الدور المحدد (${role.title}) لا يتطابق مع دور الحساب المسجل (${existingUser.role.title})."
-                    _loginState.value = LoginUiState.Error(errorMsg)
-                    _uiMessage.emit(errorMsg)
-                    onResult(false, errorMsg)
+                    val msg = "كلمة المرور غير صحيحة. يرجى التأكد وإعادة المحاولة."
+                    _uiState.update { it.copy(isLoading = false, errorMessage = msg) }
+                    _uiMessage.emit(msg)
                     return@launch
                 }
 
                 val finalUser = existingUser.toProfile()
-                _currentUser.value = finalUser
-                _loginState.value = LoginUiState.Success(finalUser)
+                _uiState.update { it.copy(isLoading = false, currentUser = finalUser, errorMessage = null) }
                 _uiMessage.emit("مرحباً بك، ${finalUser.fullName} (${finalUser.role.title})")
-                onResult(true, "تم تسجيل الدخول بنجاح")
             } catch (e: Exception) {
                 val err = "حدث خطأ أثناء الاتصال بقاعدة البيانات: ${e.localizedMessage ?: "غير معروف"}"
-                _loginState.value = LoginUiState.Error(err)
+                _uiState.update { it.copy(isLoading = false, errorMessage = err) }
                 _uiMessage.emit(err)
-                onResult(false, err)
             }
         }
     }
 
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
     fun logout() {
-        _currentUser.value = null
-        _loginState.value = LoginUiState.Idle
+        _uiState.value = AuthUiState()
         viewModelScope.launch {
             _uiMessage.emit("تم تسجيل الخروج بنجاح")
         }
@@ -133,7 +105,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                     onComplete(false, "اسم المستخدم موجود مسبقاً")
                     return@launch
                 }
-
                 val newUser = RaneenUser(
                     username = username.trim(),
                     fullName = fullName.trim(),
