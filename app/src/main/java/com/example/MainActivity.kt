@@ -10,17 +10,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.example.data.backup.DatabaseBackupManager
-import com.example.data.db.RaneenDatabase
-import com.example.data.model.UserEntity
-import com.example.data.repository.AuditRepository
-import com.example.data.sync.FirestoreSyncManager
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.MainAppScaffold
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.viewmodel.AuditViewModel
-import com.example.ui.viewmodel.AuthViewModel
-import com.example.ui.viewmodel.ManagementViewModel
+import com.example.ui.viewmodel.QualityViewModel
+import com.example.ui.viewmodel.UserViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -28,21 +23,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val database = RaneenDatabase.getDatabase(applicationContext)
-        val repository = AuditRepository(database.appDao())
-        val syncManager = FirestoreSyncManager(database.appDao())
-        val backupManager = DatabaseBackupManager(applicationContext, database.appDao())
-        val authViewModel = AuthViewModel(repository)
-        val auditViewModel = AuditViewModel(repository)
-        val managementViewModel = ManagementViewModel(repository, syncManager, backupManager)
-
         setContent {
             MyApplicationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val authUiState by authViewModel.uiState.collectAsState()
+                    val userViewModel: UserViewModel = viewModel()
+                    val qualityViewModel: QualityViewModel = viewModel()
+
+                    val authUiState by userViewModel.uiState.collectAsState()
 
                     Crossfade(
                         targetState = authUiState.currentUser,
@@ -51,18 +41,17 @@ class MainActivity : ComponentActivity() {
                         if (user != null) {
                             MainAppScaffold(
                                 currentUser = user,
-                                authViewModel = authViewModel,
-                                auditViewModel = auditViewModel,
-                                managementViewModel = managementViewModel
+                                qualityViewModel = qualityViewModel,
+                                userViewModel = userViewModel
                             )
                         } else {
                             LoginScreen(
                                 uiState = authUiState,
                                 onLogin = { username, password ->
-                                    authViewModel.login(username, password)
+                                    userViewModel.login(username, password)
                                 },
                                 onClearError = {
-                                    authViewModel.clearError()
+                                    userViewModel.clearError()
                                 }
                             )
                         }
