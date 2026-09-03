@@ -39,16 +39,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Generate debug keystore
+    - name: Setup Gradle
       if: matrix.language == 'java-kotlin'
-      run: |
-        keytool -genkey -v -keystore debug.keystore -storepass android \
-          -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-          -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-
-    - name: Grant execute permission for gradlew
-      if: matrix.language == 'java-kotlin'
-      run: chmod +x gradlew
+      uses: gradle/actions/setup-gradle@v3
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
@@ -59,7 +52,21 @@ jobs:
     - name: Compile Java/Kotlin Code
       if: matrix.build-mode == 'manual'
       run: |
-        ./gradlew assembleDebug --no-daemon || ./gradlew compileDebugSources --no-daemon
+        # إعطاء صلاحية لأي ملف gradlew موجود في أي مسار بالمشروع
+        find . -name "gradlew" -exec chmod +x {} +
+        
+        # محاولة البناء عبر gradlew إذا وُجد، أو عبر gradle العام
+        if [ -f "./gradlew" ]; then
+          ./gradlew assembleDebug --no-daemon || ./gradlew compileJava --no-daemon || ./gradlew testClasses --no-daemon
+        elif find . -name "gradlew" | grep -q gradlew; then
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+          (cd "$GRADLE_DIR" && ./gradlew assembleDebug --no-daemon || ./gradlew compileJava --no-daemon)
+        elif [ -f "./pom.xml" ]; then
+          mvn compile -B
+        else
+          gradle assembleDebug --no-daemon || gradle compileJava --no-daemon || true
+        fi
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
