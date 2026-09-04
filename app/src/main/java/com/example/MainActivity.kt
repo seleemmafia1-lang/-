@@ -1,4 +1,4 @@
-package com.example
+   package com.example
 
 import android.graphics.Color
 import android.os.Bundle
@@ -19,15 +19,23 @@ import com.example.ui.screens.MainAppScaffold
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.QualityViewModel
 import com.example.ui.viewmodel.UserViewModel
+import com.example.util.CrashLogger
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // لازم يتنفذ قبل أي حاجة تانية عشان يمسك أي كراش من أول لحظة
+        // (حتى لو حصل جوه كوروتين شغال في الباك جراوند)
+        CrashLogger.install(this)
+
         super.onCreate(savedInstanceState)
+
+        // لو التطبيق قفل المرة اللي فاتت بسبب كراش، هنعرض السبب هنا
+        val lastCrash = CrashLogger.consumeLastCrash(this)
 
         try {
             setContent {
-                var crashError by remember { mutableStateOf<String?>(null) }
+                var crashError by remember { mutableStateOf<String?>(lastCrash) }
 
                 if (crashError != null) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -60,6 +68,37 @@ class MainActivity : ComponentActivity() {
                                         )
                                     } else {
                                         LoginScreen(
+                                            uiState = authUiState,
+                                            onLogin = { username, password ->
+                                                userViewModel.login(username, password)
+                                            },
+                                            onClearError = {
+                                                userViewModel.clearError()
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        crashError = e.stackTraceToString()
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            // إذا فشلت واجهة Compose، يتم عرض الخطأ مباشرة كنص أندرويد عادي لمنع خروج التطبيق
+            val tv = TextView(this).apply {
+                text = "❌ خطأ أثناء الإقلاع:\n\n" + t.stackTraceToString()
+                setPadding(40, 80, 40, 40)
+                textSize = 13f
+                setTextColor(Color.RED)
+            }
+            val scroll = ScrollView(this).apply { addView(tv) }
+            setContentView(scroll)
+        }
+    }
+}
+                                     LoginScreen(
                                             uiState = authUiState,
                                             onLogin = { username, password ->
                                                 userViewModel.login(username, password)
