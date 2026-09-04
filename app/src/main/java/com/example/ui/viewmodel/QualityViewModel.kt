@@ -60,8 +60,12 @@ class QualityViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            repository.ensureDefaultData()
-            initNewInspection()
+            try {
+                repository.ensureDefaultData()
+                initNewInspection()
+            } catch (e: Exception) {
+                _uiMessage.emit("خطأ أثناء تهيئة البيانات: ${e.localizedMessage ?: "غير معروف"}")
+            }
         }
     }
 
