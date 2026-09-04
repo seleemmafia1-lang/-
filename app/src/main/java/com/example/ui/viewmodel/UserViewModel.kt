@@ -31,8 +31,17 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
 
     init {
+        // ملحوظة: seeding البيانات الافتراضية بيتم مرة واحدة بس من QualityViewModel
+        // عشان نمنع تعارض/تضارب لو الاتنين حاولوا يكتبوا في نفس الوقت وقت أول فتح للتطبيق.
+        // الـ try/catch هنا حماية إضافية: أي خطأ هنا كان بيقفل التطبيق بصمت
+        // لأن الكوروتين مش بيتلقط بالـ try/catch اللي في MainActivity.
         viewModelScope.launch {
-            repository.ensureDefaultData()
+            try {
+                // مجرد قراءة (مش كتابة) عشان لو فيه مشكلة في القاعدة نعرفها بدري
+                repository.getUserByUsername("__warmup_check__")
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "خطأ في تهيئة قاعدة البيانات: ${e.localizedMessage}") }
+            }
         }
     }
 
