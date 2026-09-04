@@ -12,9 +12,6 @@ import com.example.data.model.QualityProject
 import com.example.data.model.QualityReportItem
 import com.example.data.model.QualityRule
 import com.example.data.model.RaneenUser
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @Database(
     entities = [
@@ -47,18 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "raneen_quality_database.db"
                 )
                 .fallbackToDestructiveMigration()
-                .addCallback(object : Callback() {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        super.onCreate(db)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            INSTANCE?.let { database ->
-                                database.userDao().insertUsers(DefaultData.INITIAL_USERS)
-                                database.projectDao().insertProjects(DefaultData.INITIAL_PROJECTS)
-                                database.ruleDao().insertRules(DefaultData.INITIAL_RULES)
-                            }
-                        }
-                    }
-                }).build()
+                .build()
                 INSTANCE = instance
                 instance
             }
